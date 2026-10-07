@@ -1,4 +1,11 @@
+import sys
+from pathlib import Path
 import pandas as pd
+
+# Ensure project root is in sys.path when running directly
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from src.Clinical.hpo_observation_builder import (
     build_hpo_patient_values,
@@ -9,7 +16,7 @@ from src.twin.parameter_mapping import (
 )
 
 
-DATA_PATH = "data/PCOS_data_without_infertility-Full_new.csv"
+DATA_PATH = ROOT_DIR / "data" / "PCOS_data_without_infertility-Full_new.csv"
 
 
 def main():
@@ -26,29 +33,30 @@ def main():
     print("=" * 60)
     print(patient)
 
-    print("\nOBSERVATIONS")
+    print("\nHORMONES")
     print("=" * 60)
-
-    for key, value in mapping["observations"].items():
+    for key, value in mapping.hormones.items():
         print(f"{key}: {value}")
 
     print("\nFOLLICULAR OBSERVATIONS")
     print("=" * 60)
-
-    for key, value in mapping[
-        "follicular_observations"
-    ].items():
+    for key, value in mapping.follicular.items():
         print(f"{key}: {value}")
 
-    print("\nHPO PARAMETERS")
+    print("\nUTERINE OBSERVATIONS")
     print("=" * 60)
+    for key, value in mapping.uterine.items():
+        print(f"{key}: {value}")
 
-    print(mapping["parameters"])
-
-    print("\nSTATUS")
+    print("\nCYCLE OBSERVATIONS")
     print("=" * 60)
+    for key, value in mapping.cycle.items():
+        print(f"{key}: {value}")
 
-    print(mapping["status"])
+    print("\nANTHROPOMETRIC OBSERVATIONS")
+    print("=" * 60)
+    for key, value in mapping.anthropometric.items():
+        print(f"{key}: {value}")
 
 
 if __name__ == "__main__":

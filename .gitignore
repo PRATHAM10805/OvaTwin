@@ -28,6 +28,7 @@ data/*.xls
 models/*.pkl
 models/*.joblib
 models/*.model
+models/*.xml
 
 # =========================
 # Generated Results

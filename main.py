@@ -178,10 +178,10 @@ def main():
 
     print("\nGenerated files:")
 
-    print("✓ XGBoost model")
-    print("✓ Model comparison results")
-    print("✓ Evaluation metrics")
-    print("✓ SHAP explanation")
+    print("[OK] XGBoost model")
+    print("[OK] Model comparison results")
+    print("[OK] Evaluation metrics")
+    print("[OK] SHAP explanation")
 
     print("\nCheck:")
     print("results/model_comparison.json")

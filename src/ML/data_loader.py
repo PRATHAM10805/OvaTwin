@@ -3,6 +3,11 @@ from .config import DATA_PATH, TARGET_COLUMN
 
 
 def load_data():
+    if not DATA_PATH.exists():
+        raise FileNotFoundError(
+            f"Dataset not found at '{DATA_PATH}'.\n"
+            f"Please place the PCOS questionnaire dataset at '{DATA_PATH}' as described in 'data/README.md'."
+        )
     df = pd.read_csv(DATA_PATH)
 
     print("=" * 50)

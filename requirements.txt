@@ -8,4 +8,6 @@ matplotlib
 seaborn
 joblib
 scipy
-libsbml
+python-libsbml
+tellurium
+openpyxl
