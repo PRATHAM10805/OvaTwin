@@ -2,7 +2,11 @@ from dataclasses import dataclass, field
 from typing import Any, List
 
 from src.HPO.patient_values import HPOPatientValues
-from src.twin.roblitz_mapping import map_p1_b_syn_LH, MappingAuditEntry
+from src.twin.roblitz_mapping import (
+    map_p1_b_syn_LH,
+    map_p17_b_rel_FSH,
+    MappingAuditEntry,
+)
 
 
 @dataclass
@@ -36,17 +40,24 @@ def create_mapping(
     representation used by the digital twin.
 
     If personalize_ode is True, maps relevant clinical observations
-    to validated Röblitz kinetic parameters (starting with p1 / b_syn_LH in Phase 7.5).
+    to validated Röblitz kinetic parameters (p1 and p17).
     """
 
     ode_params: dict[str, float] = {}
     audit_log: List[MappingAuditEntry] = []
 
     if personalize_ode:
+        # Pituitary LH synthesis rate (p1)
         p1_val, p1_audit = map_p1_b_syn_LH(patient)
         ode_params["p1"] = p1_val
         ode_params["b_syn_LH"] = p1_val
         audit_log.append(p1_audit)
+
+        # Pituitary FSH release rate (p17)
+        p17_val, p17_audit = map_p17_b_rel_FSH(patient)
+        ode_params["p17"] = p17_val
+        ode_params["b_rel_FSH"] = p17_val
+        audit_log.append(p17_audit)
 
     return PatientTwinMapping(
         patient_id=patient.patient_id,

@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Optional, Dict
 
-from src.HPO.model_runner import RoblitzModelRunner
-from src.HPO.sbml_parameters import get_sbml_parameter_registry
+from src.twin.simulation_guard import safe_simulate, SimulationResult
 
 
 @dataclass
@@ -13,6 +12,7 @@ class BaselineSimulation:
     points: int
     result: Any
     parameter_overrides: Optional[Dict[str, float]] = None
+    simulation_result: Optional[SimulationResult] = None
 
 
 def run_baseline_simulation(
@@ -22,22 +22,16 @@ def run_baseline_simulation(
     points: int = 1201,
     parameter_overrides: Optional[Dict[str, float]] = None,
 ) -> BaselineSimulation:
-    runner = RoblitzModelRunner()
+    sim_res = safe_simulate(
+        parameter_overrides=parameter_overrides,
+        start_day=start_day,
+        end_day=end_day,
+        points=points,
+    )
 
-    if parameter_overrides:
-        model = runner.create_fresh_model()
-        reg = get_sbml_parameter_registry()
-
-        for k, v in parameter_overrides.items():
-            param_id = reg.resolve_id(k)
-            model[param_id] = float(v)
-
-        result = model.simulate(start_day, end_day, points)
-    else:
-        result = runner.simulate(
-            start=start_day,
-            end=end_day,
-            points=points,
+    if not sim_res.success:
+        raise RuntimeError(
+            f"Simulation failed for patient {patient_id}: {sim_res.error_message}"
         )
 
     return BaselineSimulation(
@@ -45,6 +39,7 @@ def run_baseline_simulation(
         start_day=start_day,
         end_day=end_day,
         points=points,
-        result=result,
+        result=sim_res.trajectory,
         parameter_overrides=parameter_overrides,
+        simulation_result=sim_res,
     )

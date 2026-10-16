@@ -265,3 +265,102 @@ def map_p1_b_syn_LH(
 
     return (final_val, audit)
 
+
+def map_p17_b_rel_FSH(
+    patient: "HPOPatientValues",
+    registry: Optional[AuthoritativeParameterRegistry] = None,
+) -> Tuple[float, MappingAuditEntry]:
+    """
+    Phase 7.8: Maps patient clinical FSH observations to Röblitz parameter p17 (b_rel_FSH).
+
+    Dual-Signal Gonadotropin Logic:
+      1. Primary Signal (Serum FSH):
+         Governs basal release rate of stored pituitary FSH into systemic blood circulation.
+         Reference median: 5.5 mIU/mL. Max perturbation contribution: +/-30%.
+      2. Secondary Signal (Computed FSH/LH ratio):
+         Reflects relative gonadotropin balance. Higher FSH/LH supports relative FSH release.
+         Reference median: 1.2. Max perturbation contribution: +/-8% (direction = +1).
+
+    Layer 1 (Soft Bounds): Combined perturbation strictly bounded to [0.65, 1.35].
+    Layer 2 (Hard Safety Clamp): Enforced via AuthoritativeParameterRegistry [0.0228, 0.1425].
+    """
+    reg = registry or get_authoritative_registry()
+    meta_p17 = reg.get("p17")
+    base_p17 = meta_p17.baseline_value
+
+    fsh_val = patient.fsh
+    ratio_val = patient.fsh_lh_ratio
+
+    # If primary FSH is completely missing, fall back to baseline
+    if fsh_val is None or math.isnan(fsh_val) or math.isinf(fsh_val):
+        final_val = base_p17
+        audit = MappingAuditEntry(
+            parameter_id="p17",
+            parameter_name="b_rel_FSH",
+            clinical_marker="FSH",
+            observed_value=None,
+            reference_value=CLINICAL_REFERENCES["FSH"],
+            scale_factor=1.0,
+            baseline_value=base_p17,
+            final_value=final_val,
+            status="missing_fallback",
+            reason="Serum FSH observation is missing; assigned published baseline.",
+        )
+        return (final_val, audit)
+
+    # 1. Primary scale from serum FSH (max_delta=0.30, alpha=0.7)
+    s_fsh = bounded_scale(
+        value=fsh_val,
+        reference=CLINICAL_REFERENCES["FSH"],
+        max_delta=0.30,
+        alpha=0.7,
+        direction=1,
+    )
+    delta_fsh = s_fsh - 1.0
+
+    # 2. Secondary scale from FSH/LH ratio (max_delta=0.08, alpha=0.5, direction=+1)
+    if ratio_val is not None and not math.isnan(ratio_val) and not math.isinf(ratio_val):
+        s_ratio = bounded_scale(
+            value=ratio_val,
+            reference=CLINICAL_REFERENCES["FSH_LH_RATIO"],
+            max_delta=0.08,
+            alpha=0.5,
+            direction=1,
+        )
+        delta_ratio = s_ratio - 1.0
+    else:
+        delta_ratio = 0.0
+
+    # Combined perturbation with soft bounding clamp [-0.35, +0.35]
+    total_delta = max(-0.35, min(delta_fsh + delta_ratio, 0.35))
+    scale_net = 1.0 + total_delta
+
+    proposed_val = base_p17 * scale_net
+
+    # Layer 2: Hard physiological safety clamp
+    final_val = meta_p17.clamp(proposed_val)
+
+    status = "clamped" if final_val != proposed_val else "personalized"
+    ratio_str = f"{ratio_val:.2f}" if ratio_val is not None else "N/A"
+    reason = (
+        f"Personalized via FSH={fsh_val:.2f} (delta={delta_fsh:+.3f}) and "
+        f"FSH/LH={ratio_str} (delta={delta_ratio:+.3f}); "
+        f"net scale={scale_net:.3f}."
+    )
+
+    audit = MappingAuditEntry(
+        parameter_id="p17",
+        parameter_name="b_rel_FSH",
+        clinical_marker="FSH+FSH_LH_ratio",
+        observed_value=fsh_val,
+        reference_value=CLINICAL_REFERENCES["FSH"],
+        scale_factor=scale_net,
+        baseline_value=base_p17,
+        final_value=final_val,
+        status=status,
+        reason=reason,
+    )
+
+    return (final_val, audit)
+
+
