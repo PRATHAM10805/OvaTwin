@@ -74,7 +74,13 @@
 - [x] Extract relevant Röblitz parameters (Phase 7.1)
 - [x] Understand parameter roles (Phase 7.2)
 - [x] Identify parameters suitable for personalization (Phase 7.3)
-- [ ] Validate clinical-to-parameter mappings
+- [x] Implement generic bounded mapping engine (Phase 7.4)
+- [x] Single-parameter mapping for p1 / b_syn_LH (Phase 7.5)
+- [x] Single-parameter ablation simulation for p1 (Phase 7.6)
+- [x] Defensive trajectory sanity & solver error guard (Phase 7.7)
+- [x] Second parameter mapping & dual-gonadotropin ablation for p17 (Phase 7.8)
+- [x] Follicular parameters mapping & combined Core 5 simulation for p49, p51, p173 (Phase 7.9)
+- [x] Full cohort batch mapping & robustness verification across all 541 patients (Phase 7.10)
 
 ### Patient-Specific Calibration
 - [ ] Define observation-to-model mapping
@@ -114,7 +120,7 @@
 - [x] Phase 4 — Röblitz Model Integration
 - [x] Phase 5 — Digital Twin Framework
 - [x] Phase 6 — Basic What-if Simulation
-- [ ] Phase 7 — Röblitz Parameter Mapping
+- [x] Phase 7 — Röblitz Parameter Mapping
 - [ ] Phase 8 — Patient-Specific Calibration
 - [ ] Phase 9 — Personalized Baseline
 - [ ] Phase 10 — ML + Twin Integration
