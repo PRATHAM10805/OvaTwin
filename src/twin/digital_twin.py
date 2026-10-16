@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional, Dict
 from src.twin.scenarios import ScenarioSimulator
 from src.HPO.baseline_simulation import run_baseline_simulation
 from src.HPO.patient_values import HPOPatientValues
@@ -38,13 +38,47 @@ class PatientDigitalTwin:
         self.ml_assessment = None
 
         self.status = "initialized"
+    @staticmethod
+    def compute_trajectory_difference(baseline_result: Any, target_result: Any) -> dict:
+        """
+        Compare two simulation trajectories column by column.
+        Returns final values, final differences, and maximum absolute differences.
+        """
+        if baseline_result.shape != target_result.shape:
+            raise ValueError(
+                f"Trajectory shapes do not match: {baseline_result.shape} vs {target_result.shape}"
+            )
+
+        comparison = {}
+        for column in baseline_result.colnames:
+            if column == "time":
+                continue
+
+            baseline_values = baseline_result[column]
+            target_values = target_result[column]
+            difference = target_values - baseline_values
+
+            clean_name = column.strip("[]")
+
+            stats = {
+                "species": clean_name,
+                "column": column,
+                "baseline_final": float(baseline_values[-1]),
+                "scenario_final": float(target_values[-1]),
+                "final_difference": float(difference[-1]),
+                "maximum_absolute_difference": float(max(abs(difference))),
+            }
+            comparison[column] = stats
+            comparison[clean_name] = stats
+
+        return comparison
+
     def compare_baseline_scenario(self, scenario_name: str):
         """
         Compare a stored scenario against the baseline simulation.
 
         Returns summary statistics for every common model variable.
         """
-
         if self.state.baseline is None:
             raise RuntimeError(
                 "Baseline simulation must be run before comparison."
@@ -58,62 +92,42 @@ class PatientDigitalTwin:
         baseline_result = self.state.baseline.result
         scenario_result = self.state.scenarios[scenario_name].result
 
-        if baseline_result.shape != scenario_result.shape:
-            raise ValueError(
-                "Baseline and scenario trajectories have different shapes."
-            )
+        return self.compute_trajectory_difference(baseline_result, scenario_result)
 
-        comparison = {}
-
-        for column in baseline_result.colnames:
-            if column == "time":
-                continue
-
-            baseline_values = baseline_result[column]
-            scenario_values = scenario_result[column]
-
-            difference = scenario_values - baseline_values
-
-            comparison[column] = {
-                "baseline_final": float(baseline_values[-1]),
-                "scenario_final": float(scenario_values[-1]),
-                "final_difference": float(difference[-1]),
-                "maximum_absolute_difference": float(
-                    max(abs(difference))
-                ),
-            }
-
-        return comparison
-
-
-        
     def get_status(self):
         return self.status
-    
+
     def run_baseline(
         self,
         start_day: float = 0,
         end_day: float = 120,
         points: int = 1201,
+        personalized: bool = False,
+        parameter_overrides: Optional[dict] = None,
     ):
         """
-        Run the baseline Röblitz HPO simulation.
+        Run the Röblitz HPO baseline simulation.
 
-        At this stage, the simulation uses the published model's
-        baseline parameterization. Patient observations remain
-        separate and are not directly substituted into kinetic
-        parameters without a validated mapping.
+        If personalized=False (default), uses the published model's generic baseline.
+        If personalized=True, injects the patient's validated ODE parameters.
+        Parameter overrides can also be specified directly (e.g. for ablation studies).
         """
+        overrides = None
+        if personalized:
+            overrides = parameter_overrides if parameter_overrides is not None else self.mapping.ode_parameters
+        elif parameter_overrides is not None:
+            overrides = parameter_overrides
 
         simulation = run_baseline_simulation(
             patient_id=self.patient.patient_id,
             start_day=start_day,
             end_day=end_day,
             points=points,
+            parameter_overrides=overrides,
         )
 
         self.state.baseline = simulation
-        self.status = "baseline_ready"
+        self.status = "personalized_baseline_ready" if overrides else "baseline_ready"
 
         return simulation
 
