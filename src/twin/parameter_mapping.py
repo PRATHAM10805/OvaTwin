@@ -1,16 +1,17 @@
 from dataclasses import dataclass, field
+from typing import Any, List
 
 from src.HPO.patient_values import HPOPatientValues
+from src.twin.roblitz_mapping import map_p1_b_syn_LH, MappingAuditEntry
 
 
 @dataclass
 class PatientTwinMapping:
     """
-    Patient-specific observations used by the digital twin.
+    Patient-specific observations and personalized ODE parameters used by the digital twin.
 
-    These values are observations from the clinical dataset.
-    They are kept separate from the fixed kinetic parameters
-    of the Röblitz HPO model.
+    Observations: static clinical observations from the patient dataset.
+    ODE Parameters: phenotype-informed personalized kinetic parameter overrides.
     """
 
     patient_id: int
@@ -21,19 +22,36 @@ class PatientTwinMapping:
     cycle: dict[str, float | None] = field(default_factory=dict)
     anthropometric: dict[str, float | None] = field(default_factory=dict)
 
+    # Phase 7: Phenotype-informed ODE parameter overrides & audit log
+    ode_parameters: dict[str, float] = field(default_factory=dict)
+    mapping_audit: List[MappingAuditEntry] = field(default_factory=list)
 
-def create_mapping(patient: HPOPatientValues) -> PatientTwinMapping:
+
+def create_mapping(
+    patient: HPOPatientValues,
+    personalize_ode: bool = True,
+) -> PatientTwinMapping:
     """
     Convert clinical/HPO observations into the patient-specific
     representation used by the digital twin.
 
-    Important:
-    These observations are NOT automatically written into
-    Röblitz kinetic parameters.
+    If personalize_ode is True, maps relevant clinical observations
+    to validated Röblitz kinetic parameters (starting with p1 / b_syn_LH in Phase 7.5).
     """
+
+    ode_params: dict[str, float] = {}
+    audit_log: List[MappingAuditEntry] = []
+
+    if personalize_ode:
+        p1_val, p1_audit = map_p1_b_syn_LH(patient)
+        ode_params["p1"] = p1_val
+        ode_params["b_syn_LH"] = p1_val
+        audit_log.append(p1_audit)
 
     return PatientTwinMapping(
         patient_id=patient.patient_id,
+        ode_parameters=ode_params,
+        mapping_audit=audit_log,
 
         hormones={
             "FSH": patient.fsh,

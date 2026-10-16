@@ -58,6 +58,16 @@ def main():
     for key, value in mapping.anthropometric.items():
         print(f"{key}: {value}")
 
+    print("\nODE PARAMETERS (PHENOTYPE-INFORMED)")
+    print("=" * 60)
+    for key, value in mapping.ode_parameters.items():
+        print(f"{key}: {value}")
+
+    print("\nMAPPING AUDIT LOG")
+    print("=" * 60)
+    for entry in mapping.mapping_audit:
+        print(entry)
+
 
 if __name__ == "__main__":
     main()
