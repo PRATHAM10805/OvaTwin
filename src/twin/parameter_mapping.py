@@ -5,6 +5,10 @@ from src.HPO.patient_values import HPOPatientValues
 from src.twin.roblitz_mapping import (
     map_p1_b_syn_LH,
     map_p17_b_rel_FSH,
+    map_p49_k_AF1,
+    map_p51_k_AF2_AF3,
+    map_p173_b_IhB,
+    map_core_5_parameters,
     MappingAuditEntry,
 )
 
@@ -40,24 +44,15 @@ def create_mapping(
     representation used by the digital twin.
 
     If personalize_ode is True, maps relevant clinical observations
-    to validated Röblitz kinetic parameters (p1 and p17).
+    to all 5 validated Core Röblitz kinetic parameters:
+    (p1, p17, p49, p51, p173).
     """
 
     ode_params: dict[str, float] = {}
     audit_log: List[MappingAuditEntry] = []
 
     if personalize_ode:
-        # Pituitary LH synthesis rate (p1)
-        p1_val, p1_audit = map_p1_b_syn_LH(patient)
-        ode_params["p1"] = p1_val
-        ode_params["b_syn_LH"] = p1_val
-        audit_log.append(p1_audit)
-
-        # Pituitary FSH release rate (p17)
-        p17_val, p17_audit = map_p17_b_rel_FSH(patient)
-        ode_params["p17"] = p17_val
-        ode_params["b_rel_FSH"] = p17_val
-        audit_log.append(p17_audit)
+        ode_params, audit_log = map_core_5_parameters(patient)
 
     return PatientTwinMapping(
         patient_id=patient.patient_id,

@@ -364,3 +364,323 @@ def map_p17_b_rel_FSH(
     return (final_val, audit)
 
 
+def map_p49_k_AF1(
+    patient: "HPOPatientValues",
+    registry: Optional[AuthoritativeParameterRegistry] = None,
+) -> Tuple[float, MappingAuditEntry]:
+    """
+    Phase 7.9: Maps patient antral follicle count to Röblitz parameter p49 (k_AF1).
+
+    Biological Mechanism:
+      Governs early antral follicle recruitment rate (re43 -> AF1).
+      In PCOS, the expanded preantral follicle pool generates excessive recruitment into AF1.
+      Primary Signal: total_follicle_count (left + right).
+      Reference Median: 12.0 follicles. Max perturbation: +/-30%.
+
+    Layer 1 (Soft Bounds): Bounded strictly to [0.65, 1.35].
+    Layer 2 (Hard Safety Clamp): Enforced via AuthoritativeParameterRegistry [1.4647, 9.1545].
+    """
+    reg = registry or get_authoritative_registry()
+    meta_p49 = reg.get("p49")
+    base_p49 = meta_p49.baseline_value
+
+    tfc = patient.total_follicle_count
+    if tfc is None and patient.follicle_count_left is not None and patient.follicle_count_right is not None:
+        tfc = patient.follicle_count_left + patient.follicle_count_right
+
+    if tfc is None or math.isnan(tfc) or math.isinf(tfc) or tfc <= 0:
+        final_val = base_p49
+        audit = MappingAuditEntry(
+            parameter_id="p49",
+            parameter_name="k_AF1",
+            clinical_marker="total_follicle_count",
+            observed_value=None,
+            reference_value=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+            scale_factor=1.0,
+            baseline_value=base_p49,
+            final_value=final_val,
+            status="missing_fallback",
+            reason="Total follicle count observation is missing; assigned published baseline.",
+        )
+        return (final_val, audit)
+
+    # Soft bounded scale from total follicle count
+    scale_raw = bounded_scale(
+        value=tfc,
+        reference=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+        max_delta=0.30,
+        alpha=0.6,
+        direction=1,
+    )
+    scale_net = max(0.65, min(scale_raw, 1.35))
+    proposed_val = base_p49 * scale_net
+
+    # Layer 2: Hard physiological safety clamp
+    final_val = meta_p49.clamp(proposed_val)
+    status = "clamped" if final_val != proposed_val else "personalized"
+    reason = f"Personalized via total_follicle_count={tfc:.1f}; net scale={scale_net:.3f}."
+
+    audit = MappingAuditEntry(
+        parameter_id="p49",
+        parameter_name="k_AF1",
+        clinical_marker="total_follicle_count",
+        observed_value=tfc,
+        reference_value=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+        scale_factor=scale_net,
+        baseline_value=base_p49,
+        final_value=final_val,
+        status=status,
+        reason=reason,
+    )
+    return (final_val, audit)
+
+
+def map_p51_k_AF2_AF3(
+    patient: "HPOPatientValues",
+    registry: Optional[AuthoritativeParameterRegistry] = None,
+) -> Tuple[float, MappingAuditEntry]:
+    """
+    Phase 7.9: Maps patient follicle maturation / cycle regularity to Röblitz parameter p51 (k_AF2_AF3).
+
+    Biological Mechanism:
+      Governs transition from antral follicles (AF2) to dominant pre-ovulatory stage (AF3) (re44).
+      In PCOS, follicular arrest occurs at 2-9 mm with failure of dominant selection.
+      Primary Signal: mean_follicle_size (reference median: 14.0 mm, max +/-25%, alpha=0.6).
+      Secondary Signal: cycle_regular (irregular/amenorrheic cycle reduces transition rate by -10%).
+
+    Layer 1 (Soft Bounds): Combined perturbation bounded to [-0.35, +0.35].
+    Layer 2 (Hard Safety Clamp): Enforced via AuthoritativeParameterRegistry [0.0039, 0.0244].
+    """
+    reg = registry or get_authoritative_registry()
+    meta_p51 = reg.get("p51")
+    base_p51 = meta_p51.baseline_value
+
+    size_val = patient.mean_follicle_size
+    if size_val is None and patient.follicle_size_left is not None and patient.follicle_size_right is not None:
+        size_val = (patient.follicle_size_left + patient.follicle_size_right) / 2.0
+
+    cycle_reg = patient.cycle_regular
+
+    # If both inputs are completely missing
+    has_size = size_val is not None and not math.isnan(size_val) and not math.isinf(size_val) and size_val > 0
+    has_cycle = cycle_reg is not None and not math.isnan(cycle_reg) and not math.isinf(cycle_reg)
+
+    if not has_size and not has_cycle:
+        final_val = base_p51
+        audit = MappingAuditEntry(
+            parameter_id="p51",
+            parameter_name="k_AF2_AF3",
+            clinical_marker="mean_follicle_size+cycle_regular",
+            observed_value=None,
+            reference_value=CLINICAL_REFERENCES["MEAN_FOLLICLE_SIZE"],
+            scale_factor=1.0,
+            baseline_value=base_p51,
+            final_value=final_val,
+            status="missing_fallback",
+            reason="Follicle size and cycle regularity unobserved; assigned published baseline.",
+        )
+        return (final_val, audit)
+
+    # 1. Primary scale from mean follicle size (direction=+1, smaller size -> lower rate)
+    if has_size:
+        s_size = bounded_scale(
+            value=size_val,
+            reference=CLINICAL_REFERENCES["MEAN_FOLLICLE_SIZE"],
+            max_delta=0.25,
+            alpha=0.6,
+            direction=1,
+        )
+        delta_size = s_size - 1.0
+    else:
+        delta_size = 0.0
+
+    # 2. Secondary modulation from cycle regularity
+    # In clinical dataset: 2.0 = Regular, >=3.0 (4.0/5.0) = Irregular
+    if has_cycle and cycle_reg >= 3.0:
+        delta_cycle = -0.10  # Follicular arrest / irregular cycle attenuates dominant follicle transition
+    else:
+        delta_cycle = 0.0
+
+    total_delta = max(-0.35, min(delta_size + delta_cycle, 0.35))
+    scale_net = 1.0 + total_delta
+    proposed_val = base_p51 * scale_net
+
+    # Layer 2: Hard physiological safety clamp
+    final_val = meta_p51.clamp(proposed_val)
+    status = "clamped" if final_val != proposed_val else "personalized"
+
+    size_str = f"{size_val:.1f}mm" if has_size else "N/A"
+    cycle_str = "Irregular" if (has_cycle and cycle_reg >= 3.0) else ("Regular" if has_cycle else "N/A")
+    reason = (
+        f"Personalized via mean_size={size_str} (delta={delta_size:+.3f}) and "
+        f"cycle={cycle_str} (delta={delta_cycle:+.3f}); net scale={scale_net:.3f}."
+    )
+
+    audit = MappingAuditEntry(
+        parameter_id="p51",
+        parameter_name="k_AF2_AF3",
+        clinical_marker="mean_follicle_size+cycle_regular",
+        observed_value=size_val if has_size else None,
+        reference_value=CLINICAL_REFERENCES["MEAN_FOLLICLE_SIZE"],
+        scale_factor=scale_net,
+        baseline_value=base_p51,
+        final_value=final_val,
+        status=status,
+        reason=reason,
+    )
+    return (final_val, audit)
+
+
+def map_p173_b_IhB(
+    patient: "HPOPatientValues",
+    registry: Optional[AuthoritativeParameterRegistry] = None,
+) -> Tuple[float, MappingAuditEntry]:
+    """
+    Phase 7.9: Maps patient follicle count and AMH to Röblitz parameter p173 (b_IhB).
+
+    Biological Mechanism:
+      Governs basal synthesis of Inhibin B (re72 -> InhB).
+      Inhibin B and AMH are secreted by granulosa cells of early antral follicles.
+      Higher follicle count and elevated AMH directly indicate expanded granulosa cell mass
+      and increased Inhibin B hypersecretion.
+      Primary Signal: total_follicle_count (reference: 12.0 follicles, max +/-25%, alpha=0.6).
+      Secondary Signal: serum AMH (reference: 2.5 ng/mL, max +/-10%, alpha=0.5).
+
+    Layer 1 (Soft Bounds): Combined perturbation bounded to [-0.35, +0.35].
+    Layer 2 (Hard Safety Clamp): Enforced via AuthoritativeParameterRegistry [35.7974, 223.7337].
+    """
+    reg = registry or get_authoritative_registry()
+    meta_p173 = reg.get("p173")
+    base_p173 = meta_p173.baseline_value
+
+    tfc = patient.total_follicle_count
+    if tfc is None and patient.follicle_count_left is not None and patient.follicle_count_right is not None:
+        tfc = patient.follicle_count_left + patient.follicle_count_right
+
+    amh_val = patient.amh
+
+    has_tfc = tfc is not None and not math.isnan(tfc) and not math.isinf(tfc) and tfc > 0
+    has_amh = amh_val is not None and not math.isnan(amh_val) and not math.isinf(amh_val) and amh_val > 0
+
+    if not has_tfc and not has_amh:
+        final_val = base_p173
+        audit = MappingAuditEntry(
+            parameter_id="p173",
+            parameter_name="b_IhB",
+            clinical_marker="total_follicle_count+amh",
+            observed_value=None,
+            reference_value=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+            scale_factor=1.0,
+            baseline_value=base_p173,
+            final_value=final_val,
+            status="missing_fallback",
+            reason="Follicle count and AMH unobserved; assigned published baseline.",
+        )
+        return (final_val, audit)
+
+    # 1. Primary scale from follicle count (max_delta=0.25, alpha=0.6)
+    if has_tfc:
+        s_tfc = bounded_scale(
+            value=tfc,
+            reference=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+            max_delta=0.25,
+            alpha=0.6,
+            direction=1,
+        )
+        delta_tfc = s_tfc - 1.0
+    else:
+        delta_tfc = 0.0
+
+    # 2. Secondary scale from AMH (max_delta=0.10, alpha=0.5)
+    if has_amh:
+        s_amh = bounded_scale(
+            value=amh_val,
+            reference=CLINICAL_REFERENCES["AMH"],
+            max_delta=0.10,
+            alpha=0.5,
+            direction=1,
+        )
+        delta_amh = s_amh - 1.0
+    else:
+        delta_amh = 0.0
+
+    total_delta = max(-0.35, min(delta_tfc + delta_amh, 0.35))
+    scale_net = 1.0 + total_delta
+    proposed_val = base_p173 * scale_net
+
+    # Layer 2: Hard physiological safety clamp
+    final_val = meta_p173.clamp(proposed_val)
+    status = "clamped" if final_val != proposed_val else "personalized"
+
+    tfc_str = f"{tfc:.1f}" if has_tfc else "N/A"
+    amh_str = f"{amh_val:.2f}ng/mL" if has_amh else "N/A"
+    reason = (
+        f"Personalized via follicle_count={tfc_str} (delta={delta_tfc:+.3f}) and "
+        f"AMH={amh_str} (delta={delta_amh:+.3f}); net scale={scale_net:.3f}."
+    )
+
+    audit = MappingAuditEntry(
+        parameter_id="p173",
+        parameter_name="b_IhB",
+        clinical_marker="total_follicle_count+amh",
+        observed_value=tfc if has_tfc else amh_val,
+        reference_value=CLINICAL_REFERENCES["TOTAL_FOLLICLE_COUNT"],
+        scale_factor=scale_net,
+        baseline_value=base_p173,
+        final_value=final_val,
+        status=status,
+        reason=reason,
+    )
+    return (final_val, audit)
+
+
+def map_core_5_parameters(
+    patient: "HPOPatientValues",
+    registry: Optional[AuthoritativeParameterRegistry] = None,
+) -> Tuple[Dict[str, float], List[MappingAuditEntry]]:
+    """
+    Phase 7.9: Maps all 5 validated Core Personalizable parameters simultaneously:
+      - p1   (b_syn_LH)   <- Serum LH & FSH/LH ratio
+      - p17  (b_rel_FSH)  <- Serum FSH & FSH/LH ratio
+      - p49  (k_AF1)      <- Total follicle count
+      - p51  (k_AF2_AF3)  <- Mean follicle size & Cycle regularity
+      - p173 (b_IhB)      <- Total follicle count & AMH
+    """
+    reg = registry or get_authoritative_registry()
+    ode_params: Dict[str, float] = {}
+    audit_log: List[MappingAuditEntry] = []
+
+    # 1. p1 (b_syn_LH)
+    p1_val, p1_audit = map_p1_b_syn_LH(patient, reg)
+    ode_params["p1"] = p1_val
+    ode_params["b_syn_LH"] = p1_val
+    audit_log.append(p1_audit)
+
+    # 2. p17 (b_rel_FSH)
+    p17_val, p17_audit = map_p17_b_rel_FSH(patient, reg)
+    ode_params["p17"] = p17_val
+    ode_params["b_rel_FSH"] = p17_val
+    audit_log.append(p17_audit)
+
+    # 3. p49 (k_AF1)
+    p49_val, p49_audit = map_p49_k_AF1(patient, reg)
+    ode_params["p49"] = p49_val
+    ode_params["k_AF1"] = p49_val
+    audit_log.append(p49_audit)
+
+    # 4. p51 (k_AF2_AF3)
+    p51_val, p51_audit = map_p51_k_AF2_AF3(patient, reg)
+    ode_params["p51"] = p51_val
+    ode_params["k_AF2_AF3"] = p51_val
+    audit_log.append(p51_audit)
+
+    # 5. p173 (b_IhB)
+    p173_val, p173_audit = map_p173_b_IhB(patient, reg)
+    ode_params["p173"] = p173_val
+    ode_params["b_IhB"] = p173_val
+    audit_log.append(p173_audit)
+
+    return (ode_params, audit_log)
+
+
+
