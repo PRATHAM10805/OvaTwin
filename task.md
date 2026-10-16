@@ -71,9 +71,9 @@
 # 🚧 Next
 
 ### Röblitz Parameter Mapping
-- [ ] Extract relevant Röblitz parameters
-- [ ] Understand parameter roles
-- [ ] Identify parameters suitable for personalization
+- [x] Extract relevant Röblitz parameters (Phase 7.1)
+- [x] Understand parameter roles (Phase 7.2)
+- [x] Identify parameters suitable for personalization (Phase 7.3)
 - [ ] Validate clinical-to-parameter mappings
 
 ### Patient-Specific Calibration
