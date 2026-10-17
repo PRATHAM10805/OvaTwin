@@ -71,6 +71,12 @@ class RoblitzModelRunner:
                 missing_ok=True
             )
 
+        # Provisional numerical mitigation for the scheduled
+        # Ago administration event near time 91.
+        # Tested at 1e-10: CVODE warnings disappeared and the
+        # tested LH trajectory remained nearly unchanged.
+        model.integrator.absolute_tolerance = 1e-10
+
         return model
 
     # ---------------------------------------------------------
