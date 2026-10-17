@@ -1,0 +1,571 @@
+/* ==========================================================================
+   OvaTwin React Integration Dashboard Stylesheet
+   Clean, modern, responsive interface for test_digital_twin.py output
+   ========================================================================== */
+
+:root {
+  --bg-color: #f6f8fa;
+  --card-bg: #ffffff;
+  --text-main: #1f2328;
+  --text-muted: #656d76;
+  --border-color: #d0d7de;
+  --primary: #0969da;
+  --primary-light: #ddf4ff;
+  --success: #1a7f37;
+  --success-light: #dafbe1;
+  --accent: #8250df;
+  --accent-light: #fbefff;
+  --danger: #cf222e;
+  --danger-light: #ffebe9;
+  --warning: #9a6700;
+  --warning-light: #fff8c5;
+  --radius: 6px;
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-stack);
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.5;
+  padding: 20px;
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-tag {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--primary);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.app-header .subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.app-header code {
+  background: #eff1f3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.header-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.badge-success {
+  background: var(--success-light);
+  color: var(--success);
+  border: 1px solid #4ac26b;
+}
+
+.badge-info {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid #54aeff;
+}
+
+.badge-warning {
+  background: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid #f9c513;
+}
+
+/* Main Container */
+.main-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.card-header h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.timestamp, .cohort-badge {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: #eff1f3;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+/* Live API Control Bar */
+.live-api-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.api-status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-green { background: #1a7f37; }
+.dot-amber { background: #d97706; }
+.dot-red { background: #cf222e; }
+
+.api-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0550ae;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Summary Grid */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.summary-metric {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.metric-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.metric-val {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.metric-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.text-success { color: var(--success); }
+.text-accent { color: var(--accent); }
+.text-primary { color: var(--primary); }
+
+/* Observations Category Grid */
+.obs-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.obs-panel {
+  background: #fdfdfd;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.obs-panel h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-bottom: 1px solid #eaeef2;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.highlight-panel {
+  background: #fcfaff;
+  border-color: #d8b9ff;
+}
+
+.highlight-panel h3 {
+  color: var(--accent);
+}
+
+.obs-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  padding: 4px 0;
+  border-bottom: 1px dashed #f0f2f4;
+}
+
+.obs-row:last-child {
+  border-bottom: none;
+}
+
+.obs-row span {
+  color: var(--text-muted);
+}
+
+.tag-status {
+  background: var(--success-light);
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Trajectory Visualizer Controls */
+.view-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+select, input[type="text"], input[type="number"] {
+  padding: 7px 12px;
+  font-size: 0.88rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text-main);
+}
+
+select:focus, input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f2f5;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.mode-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* Canvas Chart */
+.chart-wrapper {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  font-size: 0.86rem;
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.chart-footnote {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Tables & Filtering */
+.table-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.species-search {
+  min-width: 260px;
+  flex: 1;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--text-muted);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill:hover {
+  background: #f0f2f5;
+  color: var(--text-main);
+}
+
+.pill.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.table-responsive {
+  overflow-x: auto;
+  margin: 14px 0 8px 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+}
+
+.data-table th {
+  background: #f6f8fa;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.data-table tr:hover {
+  background: #fbfcfd;
+}
+
+.data-table code {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  background: #f0f2f4;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.delta-pos {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.delta-neg {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.delta-zero {
+  color: var(--text-muted);
+}
+
+.category-tag {
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.cat-hormones { background: #ddf4ff; color: #0969da; }
+.cat-follicles { background: #dafbe1; color: #1a7f37; }
+.cat-luteal { background: #fff8c5; color: #9a6700; }
+.cat-pituitary { background: #fbefff; color: #8250df; }
+.cat-other { background: #f0f2f4; color: #57606a; }
+
+.table-footer {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* Assertions Panel */
+.assertions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assertion-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #d0d7de;
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.88rem;
+  flex-wrap: wrap;
+}
+
+.assertion-item.pass {
+  border-left: 4px solid var(--success);
+}
+
+.assertion-check {
+  font-weight: 700;
+  color: var(--success);
+  font-size: 0.82rem;
+  min-width: 65px;
+}
+
+.assertion-code {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  background: #f6f8fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.assertion-eval {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+/* Footer */
+.app-footer {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 30px 0 10px 0;
+}
