@@ -43,11 +43,31 @@ function getCategoryBadge(cat) {
   return <span className={`category-tag cat-${cat}`}>{labels[cat] || cat}</span>;
 }
 
+function renderObs(val, unit = "", decimals = 2) {
+  if (val === null || val === undefined || (typeof val === "number" && isNaN(val))) {
+    return <span className="obs-na">Not Available</span>;
+  }
+  const formatted = typeof val === "number" ? (Number.isInteger(val) ? val : val.toFixed(decimals)) : val;
+  return (
+    <strong>
+      {formatted}
+      {unit ? ` ${unit}` : ""}
+    </strong>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState(fallbackData);
+  const [isLive, setIsLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState("idle"); // 'connected' | 'offline' | 'idle'
-  const [serverMessage, setServerMessage] = useState("Loaded verified calculation from test_digital_twin.py");
+  const [serverMessage, setServerMessage] = useState(
+    "Loaded saved offline reference data (Patient File #1). Start backend for live simulations."
+  );
+
+  // Patient selection options
+  const [randomPatient, setRandomPatient] = useState(true);
+  const [specificPatientId, setSpecificPatientId] = useState("");
 
   // Visualizer controls
   const [preset, setPreset] = useState("lh_fsh");
@@ -67,29 +87,67 @@ export default function App() {
   // Initial backend health probe
   useEffect(() => {
     fetch("http://localhost:8000/api/health")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((res) => {
         if (res.status === "ok") {
           setApiStatus("connected");
-          setServerMessage("FastAPI backend online & connected on http://localhost:8000");
+          setServerMessage(`FastAPI backend online (Cohort: ${res.cohort_size} patients loaded on http://localhost:8000)`);
+        } else {
+          setApiStatus("offline");
+          setServerMessage("Backend returned non-OK status");
         }
       })
-      .catch(() => {
+      .catch((err) => {
         setApiStatus("offline");
-        setServerMessage("Backend offline (start server: uvicorn server:app --port 8000)");
+        setServerMessage(`Backend offline (${err.message}). Start: uvicorn server:app --port 8000`);
       });
   }, []);
 
-  // Live simulation execution
-  const runLiveSimulation = async (param, pct) => {
+  // Quick inspect random patient without full ODE
+  const inspectRandomPatient = async () => {
     setLoading(true);
-    setServerMessage(`Simulating 120 days via Python backend (${param} ${pct >= 0 ? "+" : ""}${pct}%)...`);
+    setServerMessage("Fetching random clinical patient record from cohort...");
+    try {
+      const res = await fetch("http://localhost:8000/api/patient?random=true");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const patientInfo = await res.json();
+      setData((prev) => ({
+        ...prev,
+        is_live: false,
+        patient_observations: patientInfo.patient_observations,
+        comparison_readiness: patientInfo.comparison_readiness,
+        data_quality_flags: patientInfo.data_quality_flags,
+      }));
+      setApiStatus("connected");
+      setServerMessage(
+        `Loaded Patient File #${patientInfo.patient_observations.patient_id} (Row ${patientInfo.patient_observations.row_index}). Click 'Run Digital Twin' to simulate.`
+      );
+    } catch (err) {
+      setApiStatus("offline");
+      setServerMessage(`Failed to fetch patient (${err.message}). Ensure backend is running.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Live simulation execution
+  const runDigitalTwinSimulation = async (param, pct, isRand = randomPatient, specificId = specificPatientId) => {
+    setLoading(true);
+    const targetPatient = isRand ? "random" : specificId.trim() || "random";
+    setServerMessage(
+      `Executing Digital Twin (src/twin/digital_twin.py) for ${isRand ? "random patient" : `Patient #${targetPatient}`} (${param} ${pct >= 0 ? "+" : ""}${pct}%)...`
+    );
+
     try {
       const response = await fetch("http://localhost:8000/api/run-simulation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patient_id: 1,
+          patient_id: targetPatient,
+          random_patient: isRand,
           start_day: 0.0,
           end_day: 120.0,
           points: 1201,
@@ -99,16 +157,20 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const freshData = await response.json();
       setData(freshData);
+      setIsLive(true);
       setApiStatus("connected");
-      setServerMessage(`Simulation completed in real-time for ${param} (${pct >= 0 ? "+" : ""}${pct}%)`);
+      setServerMessage(
+        `Digital twin simulation completed live for Patient #${freshData.patient_observations?.patient_id} (Row ${freshData.patient_observations?.row_index})`
+      );
     } catch (err) {
       setApiStatus("offline");
-      setServerMessage(`Backend offline (${err.message}). Start: uvicorn server:app --port 8000`);
+      setServerMessage(`Backend offline or failed (${err.message}). Start: uvicorn server:app --port 8000`);
     } finally {
       setLoading(false);
     }
@@ -249,39 +311,25 @@ export default function App() {
       ctx.moveTo(x, padTop);
       ctx.lineTo(x, padTop + plotH);
       ctx.stroke();
-      ctx.fillText(`${t}d`, x, height - padBottom + 18);
+      ctx.fillText(`${t}d`, x, padTop + plotH + 18);
     }
 
-    // Outer border
-    ctx.strokeStyle = "#8c959f";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(padLeft, padTop);
-    ctx.lineTo(padLeft, padTop + plotH);
-    ctx.lineTo(width - padRight, padTop + plotH);
-    ctx.stroke();
-
-    // Axis labels
-    ctx.fillStyle = "#1f2328";
+    // X Axis title
+    ctx.textAlign = "center";
     ctx.font = "12px -apple-system, sans-serif";
-    ctx.fillText("Menstrual Cycle Timeline (Days 0 to 120)", padLeft + plotW / 2, height - 10);
+    ctx.fillStyle = "#1f2328";
+    ctx.fillText("Menstrual Cycle Timeline (Days, 0 to 120d)", padLeft + plotW / 2, height - 8);
 
-    ctx.save();
-    ctx.translate(16, padTop + plotH / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(chartMode === "delta" ? "Delta (Scenario - Baseline)" : "Concentration / Abundance", 0, 0);
-    ctx.restore();
-
-    // Render Curves
+    // Draw curves
     activeSpecies.forEach((sp) => {
       const traj = data.trajectories[sp.id];
       if (!traj) return;
 
       if (chartMode === "overlay") {
-        // Baseline (Dashed)
-        ctx.strokeStyle = "#8c959f";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+        // Baseline curve (solid)
+        ctx.strokeStyle = sp.color;
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([]);
         ctx.beginPath();
         for (let i = 0; i < times.length; i++) {
           const x = getX(times[i]);
@@ -291,10 +339,10 @@ export default function App() {
         }
         ctx.stroke();
 
-        // Scenario (Solid)
+        // Scenario curve (dashed)
         ctx.strokeStyle = sp.color;
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([]);
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
         ctx.beginPath();
         for (let i = 0; i < times.length; i++) {
           const x = getX(times[i]);
@@ -303,10 +351,11 @@ export default function App() {
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
+        ctx.setLineDash([]);
       } else {
-        // Delta only
+        // Delta curve (solid)
         ctx.strokeStyle = sp.color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.2;
         ctx.setLineDash([]);
         ctx.beginPath();
         for (let i = 0; i < times.length; i++) {
@@ -319,6 +368,26 @@ export default function App() {
         ctx.stroke();
       }
     });
+
+    // Chart Legend
+    let legendX = padLeft + 12;
+    let legendY = padTop + 14;
+
+    ctx.textAlign = "left";
+    ctx.font = "11px -apple-system, sans-serif";
+
+    activeSpecies.forEach((sp) => {
+      ctx.fillStyle = sp.color;
+      ctx.fillRect(legendX, legendY - 8, 14, 10);
+      ctx.fillStyle = "#1f2328";
+      ctx.fillText(sp.name, legendX + 18, legendY);
+
+      if (chartMode === "overlay") {
+        ctx.fillStyle = "#656d76";
+        ctx.fillText("(— Baseline, - - Scenario)", legendX + 22 + ctx.measureText(sp.name).width, legendY);
+      }
+      legendY += 18;
+    });
   }, [data, preset, singleSpecies, chartMode]);
 
   const obs = data.patient_observations || {};
@@ -326,12 +395,17 @@ export default function App() {
   const comparison = data.comparison || {};
   const assertions = data.assertions || [];
 
-  // Filter comparison table species
+  // Compute assertions pass count dynamically
+  const passCount = assertions.filter((a) => a.passed).length;
+  const totalAssertions = assertions.length;
+  const allAssertionsPassed = passCount === totalAssertions && totalAssertions > 0;
+
+  // Filter species for table
   const filteredSpecies = Object.keys(comparison).filter((sp) => {
+    const matchesSearch = sp.toLowerCase().includes(searchQuery.toLowerCase());
     const cat = getCategory(sp);
-    if (categoryFilter !== "all" && cat !== categoryFilter) return false;
-    if (searchQuery && !sp.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
+    const matchesCat = categoryFilter === "all" || cat === categoryFilter;
+    return matchesSearch && matchesCat;
   });
 
   return (
@@ -342,11 +416,13 @@ export default function App() {
           <div className="header-tag">Biophysical Digital Twin &bull; React Dashboard</div>
           <h1>OvaTwin: Digital Twin Integration Dashboard</h1>
           <p className="subtitle">
-            Target: <code>src/integration/test_digital_twin.py::test_digital_twin_baseline_and_scenario</code>
+            Engine: <code>src/twin/digital_twin.py (PatientDigitalTwin)</code> &bull; Röblitz 2013 ODE (BIOMD0000000494)
           </p>
         </div>
         <div className="header-badges">
-          <span className="badge badge-success">&#10003; TEST PASSED (23.7s)</span>
+          <span className={`badge ${allAssertionsPassed ? "badge-success" : "badge-danger"}`}>
+            {allAssertionsPassed ? "✓" : "⚠"} {passCount} / {totalAssertions} Diagnostics Verified
+          </span>
           <span className="badge badge-info">RoadRunner CVODE 120d</span>
           <span className={`badge ${apiStatus === "connected" ? "badge-success" : "badge-warning"}`}>
             API: {apiStatus.toUpperCase()}
@@ -354,14 +430,68 @@ export default function App() {
         </div>
       </header>
 
-      {/* Live Interactive API Control Bar */}
+      {/* Offline / Live Status Banner */}
+      {!isLive && (
+        <div className="banner-notice banner-offline">
+          <div className="banner-badge badge-warning">OFFLINE SAMPLE SNAPSHOT</div>
+          <div className="banner-content">
+            <strong>Showing saved offline reference data (Patient File #{obs.patient_id || 1}).</strong>{" "}
+            This is pre-generated offline data, not an on-demand live simulation. Start the backend (
+            <code>uvicorn server:app --port 8000</code>) and click <strong>"Run Digital Twin"</strong> to execute live ODE simulations on real cohort patients.
+          </div>
+        </div>
+      )}
+
+      {isLive && (
+        <div className="banner-notice banner-live">
+          <div className="banner-badge badge-success">LIVE SIMULATION ACTIVE</div>
+          <div className="banner-content">
+            Simulating genuine clinical data from <strong>Patient File #{obs.patient_id}</strong> (Cohort Row #{obs.row_index ?? "N/A"}). Executed in real time via <code>src/twin/digital_twin.py</code> with 120-day RoadRunner CVODE integration.
+          </div>
+        </div>
+      )}
+
+      {/* Live Interactive API & Patient Selection Bar */}
       <div className="live-api-bar">
         <div className="api-status-group">
           <span className={`status-dot ${apiStatus === "connected" ? "dot-green" : "dot-amber"}`}></span>
           <span>{serverMessage}</span>
         </div>
         <div className="api-controls">
-          <label><strong>Parameter:</strong></label>
+          {/* Patient Selection Controls (Finding 1) */}
+          <div className="patient-controls-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={randomPatient}
+                onChange={(e) => setRandomPatient(e.target.checked)}
+              />
+              <strong>Random Patient</strong>
+            </label>
+
+            {!randomPatient && (
+              <input
+                type="text"
+                placeholder="Patient File No. (1-541)"
+                value={specificPatientId}
+                onChange={(e) => setSpecificPatientId(e.target.value)}
+                style={{ width: "160px" }}
+              />
+            )}
+
+            <button
+              className="btn btn-secondary btn-sm"
+              disabled={loading || apiStatus !== "connected"}
+              onClick={inspectRandomPatient}
+              title="Inspect random patient observations without running full 120d ODE"
+            >
+              🎲 Sample Patient
+            </button>
+          </div>
+
+          <label>
+            <strong>Parameter:</strong>
+          </label>
           <select value={paramChoice} onChange={(e) => setParamChoice(e.target.value)}>
             <option value="p1">p1 (b_syn_LH - Basal LH Synthesis)</option>
             <option value="p17">p17 (b_rel_FSH - Basal FSH Release)</option>
@@ -369,7 +499,9 @@ export default function App() {
             <option value="p51">p51 (k_AF2_AF3 - Follicle Maturation)</option>
           </select>
 
-          <label><strong>Perturbation:</strong></label>
+          <label>
+            <strong>Perturbation:</strong>
+          </label>
           <input
             type="number"
             step="0.1"
@@ -377,16 +509,16 @@ export default function App() {
             max="35"
             value={paramPercent}
             onChange={(e) => setParamPercent(e.target.value)}
-            style={{ width: "80px" }}
+            style={{ width: "75px" }}
           />
           <span>%</span>
 
           <button
             className="btn btn-primary"
             disabled={loading}
-            onClick={() => runLiveSimulation(paramChoice, paramPercent)}
+            onClick={() => runDigitalTwinSimulation(paramChoice, paramPercent, randomPatient, specificPatientId)}
           >
-            {loading ? "Running Python ODE..." : "Run Live Simulation"}
+            {loading ? "Simulating Python ODE..." : randomPatient ? "🎲 Run Digital Twin (Random Patient)" : "⚡ Run Digital Twin"}
           </button>
         </div>
       </div>
@@ -394,14 +526,18 @@ export default function App() {
       {/* 1. Summary Card */}
       <section className="card">
         <div className="card-header">
-          <h2>1. Test Execution & Twin Lifecycle Summary</h2>
-          <div className="timestamp">Status: {data.summary?.status || "scenario_ready"}</div>
+          <h2>1. Digital Twin Lifecycle & Patient Summary</h2>
+          <div className="timestamp">
+            Status: <strong>{data.summary?.status || "scenario_ready"}</strong>
+          </div>
         </div>
         <div className="summary-grid">
           <div className="summary-metric">
-            <div className="metric-title">Patient Record</div>
-            <div className="metric-val">Patient #{obs.patient_id || 1}</div>
-            <div className="metric-sub">Row 0 in clinical cohort</div>
+            <div className="metric-title">Patient File Record</div>
+            <div className="metric-val text-primary">Patient #{obs.patient_id || 1}</div>
+            <div className="metric-sub">
+              {obs.row_index !== null && obs.row_index !== undefined ? `Cohort Row Index: ${obs.row_index}` : "Clinical cohort"}
+            </div>
           </div>
           <div className="summary-metric">
             <div className="metric-title">Twin Lifecycle Status</div>
@@ -411,7 +547,7 @@ export default function App() {
           <div className="summary-metric">
             <div className="metric-title">Simulation Grid</div>
             <div className="metric-val">1201 &times; 46</div>
-            <div className="metric-sub">120 Days &bull; 0.1d steps</div>
+            <div className="metric-sub">120 Days &bull; 0.1d steps (CVODE)</div>
           </div>
           <div className="summary-metric">
             <div className="metric-title">What-If Scenario</div>
@@ -423,61 +559,147 @@ export default function App() {
             </div>
           </div>
           <div className="summary-metric">
-            <div className="metric-title">Observations Available</div>
-            <div className="metric-val">21 / 22</div>
-            <div className="metric-sub">95.5% completeness</div>
+            <div className="metric-title">Data Completeness</div>
+            <div className="metric-val">
+              {data.summary?.clinical_profile?.available_observation_count ?? 18} / {data.summary?.clinical_profile?.total_observation_count ?? 19}
+            </div>
+            <div className="metric-sub">
+              {data.summary?.clinical_profile?.completeness_fraction
+                ? `${(data.summary.clinical_profile.completeness_fraction * 100).toFixed(1)}% complete`
+                : "Real patient observations"}
+            </div>
           </div>
           <div className="summary-metric">
-            <div className="metric-title">Test Assertions</div>
-            <div className="metric-val text-success">8 / 8 Passed</div>
-            <div className="metric-sub">Zero non-finite values</div>
+            <div className="metric-title">Runtime Diagnostics</div>
+            <div className={`metric-val ${allAssertionsPassed ? "text-success" : "text-danger"}`}>
+              {passCount} / {totalAssertions} Passed
+            </div>
+            <div className="metric-sub">Finiteness & state verification</div>
           </div>
         </div>
       </section>
 
-      {/* 2. Patient Observations Card */}
+      {/* 2. Patient Observations Card (Real Data with NO Fabrication) */}
       <section className="card">
         <div className="card-header">
-          <h2>2. Patient Observations (Input to Digital Twin)</h2>
-          <div className="cohort-badge">Dataset: clinical_dataset_preprocessed.csv</div>
+          <h2>2. Patient Observations (Input to Digital Twin Profile)</h2>
+          <div className="cohort-badge">
+            Patient File #{obs.patient_id || 1} &bull; Dataset: clinical_dataset_preprocessed.csv
+          </div>
         </div>
 
         <div className="obs-category-grid">
           <div className="obs-panel">
             <h3>Anthropometric</h3>
-            <div className="obs-row"><span>Age:</span> <strong>{obs.age} yrs</strong></div>
-            <div className="obs-row"><span>Weight / Height:</span> <strong>{obs.weight} kg / {obs.height} cm</strong></div>
-            <div className="obs-row"><span>BMI:</span> <strong>{obs.bmi?.toFixed(2)} kg/m²</strong></div>
-            <div className="obs-row"><span>Waist / Hip Ratio:</span> <strong>{obs.waist_hip_ratio?.toFixed(2)}</strong></div>
+            <div className="obs-row">
+              <span>Age:</span> {renderObs(obs.age, "yrs")}
+            </div>
+            <div className="obs-row">
+              <span>Weight:</span> {renderObs(obs.weight, "kg")}
+            </div>
+            <div className="obs-row">
+              <span>Height:</span> {renderObs(obs.height, "cm")}
+            </div>
+            <div className="obs-row">
+              <span>BMI:</span> {renderObs(obs.bmi, "kg/m²")}
+            </div>
+            <div className="obs-row">
+              <span>Waist / Hip Ratio:</span> {renderObs(obs.waist_hip_ratio)}
+            </div>
           </div>
 
           <div className="obs-panel">
             <h3>Endocrine & Hormones</h3>
-            <div className="obs-row"><span>Serum LH:</span> <strong>{obs.lh?.toFixed(2)} mIU/mL</strong></div>
-            <div className="obs-row"><span>Serum FSH:</span> <strong>{obs.fsh?.toFixed(2)} mIU/mL</strong></div>
-            <div className="obs-row"><span>FSH / LH Ratio:</span> <strong className="text-primary">{obs.fsh_lh_ratio?.toFixed(2)}</strong></div>
-            <div className="obs-row"><span>Serum AMH:</span> <strong>{obs.amh?.toFixed(2)} ng/mL</strong></div>
-            <div className="obs-row"><span>Progesterone (P4):</span> <strong>0.57 ng/mL</strong></div>
-            <div className="obs-row"><span>Prolactin / TSH:</span> <strong>45.16 / 0.68</strong></div>
+            <div className="obs-row">
+              <span>Serum LH:</span> {renderObs(obs.lh, "mIU/mL")}
+            </div>
+            <div className="obs-row">
+              <span>Serum FSH:</span> {renderObs(obs.fsh, "mIU/mL")}
+            </div>
+            <div className="obs-row">
+              <span>FSH / LH Ratio:</span> {renderObs(obs.fsh_lh_ratio)}
+            </div>
+            <div className="obs-row">
+              <span>Serum AMH:</span> {renderObs(obs.amh, "ng/mL")}
+            </div>
+            <div className="obs-row">
+              <span>Progesterone (P4):</span> {renderObs(obs.progesterone, "ng/mL")}
+            </div>
+            <div className="obs-row">
+              <span>Prolactin (PRL):</span> {renderObs(obs.prolactin, "ng/mL")}
+            </div>
+            <div className="obs-row">
+              <span>TSH:</span> {renderObs(obs.tsh, "mIU/L")}
+            </div>
           </div>
 
           <div className="obs-panel">
             <h3>Follicles & Uterine</h3>
-            <div className="obs-row"><span>Left Follicles:</span> <strong>{obs.left_follicles}</strong></div>
-            <div className="obs-row"><span>Right Follicles:</span> <strong>{obs.right_follicles}</strong></div>
-            <div className="obs-row"><span>Total Antral Follicles:</span> <strong>{obs.total_follicles}</strong></div>
-            <div className="obs-row"><span>Mean Follicle Size:</span> <strong>{obs.mean_follicle_size?.toFixed(1)} mm</strong></div>
-            <div className="obs-row"><span>Endometrium Thickness:</span> <strong>{obs.endometrium || 8.5} mm</strong></div>
-            <div className="obs-row"><span>Cycle Regularity:</span> <strong>Regular (Code 2)</strong></div>
+            <div className="obs-row">
+              <span>Left Follicles:</span> {renderObs(obs.left_follicles)}
+            </div>
+            <div className="obs-row">
+              <span>Right Follicles:</span> {renderObs(obs.right_follicles)}
+            </div>
+            <div className="obs-row">
+              <span>Total Antral Follicles:</span> {renderObs(obs.total_follicles)}
+            </div>
+            <div className="obs-row">
+              <span>Mean Follicle Size:</span> {renderObs(obs.mean_follicle_size, "mm", 1)}
+            </div>
+            <div className="obs-row">
+              <span>Endometrium Thickness:</span> {renderObs(obs.endometrium, "mm", 1)}
+            </div>
+            <div className="obs-row">
+              <span>Cycle Status:</span>{" "}
+              {obs.cycle_status_encoded !== null && obs.cycle_status_encoded !== undefined ? (
+                <strong>Code {obs.cycle_status_encoded} (Uninterpreted)</strong>
+              ) : (
+                <span className="obs-na">Not Available</span>
+              )}
+            </div>
+            <div className="obs-row">
+              <span>Clinical PCOS Label:</span>{" "}
+              {obs.pcos_label !== null && obs.pcos_label !== undefined ? (
+                <strong className={obs.pcos_label === 1 ? "text-danger" : "text-success"}>
+                  {obs.pcos_label === 1 ? "PCOS Positive (1)" : "PCOS Negative (0)"}
+                </strong>
+              ) : (
+                <span className="obs-na">Not Available</span>
+              )}
+            </div>
           </div>
 
+          {/* Model Mapping Readiness (Finding 4: Accurate, unexaggerated readiness statuses) */}
           <div className="obs-panel highlight-panel">
-            <h3>Model Mapping Readiness</h3>
-            <div className="obs-row"><span>LH &rarr; [LH_bld]:</span> <span className="tag-status">Ready</span></div>
-            <div className="obs-row"><span>FSH &rarr; [FSH_bld]:</span> <span className="tag-status">Ready</span></div>
-            <div className="obs-row"><span>Progesterone &rarr; [P4]:</span> <span className="tag-status">Ready</span></div>
-            <div className="obs-row"><span>AMH (p173 indirect):</span> <span className="tag-status">Mapped</span></div>
-            <div className="obs-row"><span>Follicles (p49 indirect):</span> <span className="tag-status">Mapped</span></div>
+            <h3>Biological Mapping Readiness</h3>
+            <div className="obs-row">
+              <span>LH &rarr; [LH_bld]:</span>
+              <span className="tag-status tag-status-amber">Candidate mapping (needs unit/timing validation)</span>
+            </div>
+            <div className="obs-row">
+              <span>FSH &rarr; [FSH_bld]:</span>
+              <span className="tag-status tag-status-amber">Candidate mapping (needs unit/timing validation)</span>
+            </div>
+            <div className="obs-row">
+              <span>Progesterone &rarr; [P4]:</span>
+              <span className="tag-status tag-status-amber">Candidate mapping (needs unit/timing validation)</span>
+            </div>
+            <div className="obs-row">
+              <span>AMH:</span>
+              <span className="tag-status tag-status-gray">No verified direct output mapping</span>
+            </div>
+            <div className="obs-row">
+              <span>Follicle Pool (AF1):</span>
+              <span className="tag-status tag-status-purple">Indirect surrogate mapping (p49 / pool)</span>
+            </div>
+            <div className="obs-row">
+              <span>Prolactin / TSH:</span>
+              <span className="tag-status tag-status-gray">No verified direct output mapping</span>
+            </div>
+            <div className="mapping-disclaimer">
+              OvaTwin Design Note: Clinical observations are observed patient measurements, not direct ODE kinetic parameters. The model runs the original Röblitz (2013) parameterization. Patient-specific calibration has not yet been validated.
+            </div>
           </div>
         </div>
       </section>
@@ -487,7 +709,9 @@ export default function App() {
         <div className="card-header">
           <h2>3. Dynamic Menstrual Cycle Trajectories (Baseline vs. Scenario)</h2>
           <div className="view-controls">
-            <label><strong>Quick Preset:</strong></label>
+            <label>
+              <strong>Quick Preset:</strong>
+            </label>
             <select value={preset} onChange={(e) => setPreset(e.target.value)}>
               <option value="lh_fsh">Gonadotropins: LH_bld & FSH_bld</option>
               <option value="steroids">Steroids: Estradiol E2 & Progesterone P4</option>
@@ -544,7 +768,11 @@ export default function App() {
       {/* 4. Complete 45-Species Comparison Table */}
       <section className="card">
         <div className="card-header">
-          <h2>4. Model Species Comparison: Baseline vs. Scenario ({scen.parameter} {scen.percent_change >= 0 ? "+" : ""}{scen.percent_change}%)</h2>
+          <h2>
+            4. Model Species Comparison: Baseline vs. Scenario ({scen.parameter}{" "}
+            {scen.percent_change >= 0 ? "+" : ""}
+            {scen.percent_change}%)
+          </h2>
           <div className="table-tools">
             <input
               type="text"
@@ -599,15 +827,24 @@ export default function App() {
 
                 return (
                   <tr key={sp}>
-                    <td><code>[{sp}]</code></td>
+                    <td>
+                      <code>[{sp}]</code>
+                    </td>
                     <td>{getCategoryBadge(getCategory(sp))}</td>
                     <td>{metrics.baseline_final?.toFixed(4)}</td>
                     <td>{metrics.scenario_final?.toFixed(4)}</td>
-                    <td className={deltaClass}>{deltaPrefix}{diff.toFixed(5)}</td>
-                    <td className={deltaClass}>{pct !== null && pct !== undefined ? `${deltaPrefix}${pct.toFixed(3)}%` : "N/A"}</td>
+                    <td className={deltaClass}>
+                      {deltaPrefix}
+                      {diff.toFixed(5)}
+                    </td>
+                    <td className={deltaClass}>
+                      {pct !== null && pct !== undefined ? `${deltaPrefix}${pct.toFixed(3)}%` : "N/A"}
+                    </td>
                     <td>{metrics.maximum_absolute_difference?.toFixed(4)}</td>
                     <td>{metrics.mean_absolute_difference?.toFixed(5)}</td>
-                    <td><strong>{metrics.rmse?.toFixed(5)}</strong></td>
+                    <td>
+                      <strong>{metrics.rmse?.toFixed(5)}</strong>
+                    </td>
                   </tr>
                 );
               })}
@@ -619,28 +856,39 @@ export default function App() {
         </div>
       </section>
 
-      {/* 5. Executed Test Assertions */}
+      {/* 5. Executed Test Assertions & Diagnostics (Finding 2: Dynamic pass counts & real condition rendering) */}
       <section className="card">
         <div className="card-header">
-          <h2>5. Executed Test Assertions (from test_digital_twin.py)</h2>
-          <span className="badge badge-success">&#10003; 8 / 8 Assertions Satisfied</span>
+          <h2>5. Runtime Diagnostics & Model Verification (from test_digital_twin.py)</h2>
+          <span className={`badge ${allAssertionsPassed ? "badge-success" : "badge-danger"}`}>
+            {allAssertionsPassed ? "✓" : "⚠"} {passCount} / {totalAssertions} Diagnostics Satisfied
+          </span>
         </div>
 
         <div className="assertions-list">
           {assertions.map((item, idx) => (
-            <div key={idx} className="assertion-item pass">
-              <div className="assertion-check">&#10003; PASS</div>
-              <div className="assertion-code"><code>{item.code}</code></div>
-              <div className="assertion-eval">Evaluated: <code>{item.eval}</code></div>
+            <div key={idx} className={`assertion-item ${item.passed ? "pass" : "fail"}`}>
+              <div className={`assertion-check ${item.passed ? "text-success" : "text-danger"}`}>
+                {item.passed ? "✓ PASS" : "✗ FAIL"}
+              </div>
+              <div className="assertion-code">
+                <code>{item.code}</code>
+              </div>
+              <div className="assertion-eval">
+                Evaluated: <code>{item.eval}</code>
+              </div>
             </div>
           ))}
+        </div>
+        <div className="diagnostics-footnote">
+          Diagnostics evaluated dynamically during execution. Formal automated test suites are run separately via <code>pytest src/integration/test_digital_twin.py</code>.
         </div>
       </section>
 
       {/* Footer */}
       <footer className="app-footer">
         <p>
-          OvaTwin React Integration Dashboard &bull; <code>src/integration/test_digital_twin.py</code> &bull; BioModels BIOMD0000000494
+          OvaTwin React Integration Dashboard &bull; <code>src/twin/digital_twin.py</code> &bull; BioModels BIOMD0000000494
         </p>
       </footer>
     </div>

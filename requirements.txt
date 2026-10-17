@@ -9,3 +9,5 @@ seaborn
 joblib
 scipy
 libsbml
+fastapi
+uvicorn

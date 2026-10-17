@@ -116,6 +116,135 @@ body {
   border: 1px solid #f9c513;
 }
 
+.badge-danger {
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid #ff8182;
+}
+
+/* Banner Notices */
+.banner-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.banner-offline {
+  background: #fff8c5;
+  border: 1px solid #d4a72c;
+  color: #573e00;
+}
+
+.banner-live {
+  background: #dafbe1;
+  border: 1px solid #4ac26b;
+  color: #116329;
+}
+
+.banner-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.banner-content {
+  flex: 1;
+}
+
+/* Patient Controls */
+.patient-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn-secondary {
+  background: #eff1f3;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e2e5e8;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.82rem;
+}
+
+/* Observation Not Available */
+.obs-na {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: normal;
+}
+
+/* Status tags for Mapping Readiness */
+.tag-status-amber {
+  background: #fff8c5;
+  color: #9a6700;
+  border: 1px solid #f9c513;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.tag-status-gray {
+  background: #f0f2f4;
+  color: #57606a;
+  border: 1px solid #d0d7de;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.tag-status-purple {
+  background: #fbefff;
+  color: #8250df;
+  border: 1px solid #d2a8ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.mapping-disclaimer {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: #f6f8fa;
+  border-left: 3px solid var(--warning);
+  padding: 10px 12px;
+  border-radius: 0 4px 4px 0;
+  margin-top: 12px;
+  line-height: 1.45;
+}
+
 /* Main Container */
 .main-container {
   display: flex;
@@ -540,6 +669,18 @@ canvas {
 
 .assertion-item.pass {
   border-left: 4px solid var(--success);
+}
+
+.assertion-item.fail {
+  border-left: 4px solid var(--danger);
+  background: #fff8f8;
+}
+
+.diagnostics-footnote {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 12px;
+  font-style: italic;
 }
 
 .assertion-check {

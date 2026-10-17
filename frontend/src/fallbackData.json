@@ -1,4 +1,8 @@
 {
+  "is_live": false,
+  "is_fallback": true,
+  "generated_at": "2026-10-17T20:02:35.826308+00:00",
+  "source_note": "Saved sample offline snapshot from Patient File No. 1. Not a live simulation run.",
   "summary": {
     "patient_id": 1,
     "status": "scenario_ready",
@@ -91,8 +95,42 @@
       }
     }
   },
+  "comparison_readiness": {
+    "LH": {
+      "observed_value": 3.68,
+      "candidate_model_species": "LH_bld",
+      "status": "NEEDS_UNIT_AND_TIMING_ALIGNMENT"
+    },
+    "FSH": {
+      "observed_value": 7.95,
+      "candidate_model_species": "FSH_bld",
+      "status": "NEEDS_UNIT_AND_TIMING_ALIGNMENT"
+    },
+    "Progesterone": {
+      "observed_value": 0.57,
+      "candidate_model_species": "P4",
+      "status": "NEEDS_UNIT_AND_TIMING_ALIGNMENT"
+    },
+    "AMH": {
+      "observed_value": 2.07,
+      "candidate_model_species": null,
+      "status": "NO_VERIFIED_DIRECT_OUTPUT_MAPPING"
+    },
+    "Prolactin": {
+      "observed_value": 45.16,
+      "candidate_model_species": null,
+      "status": "NO_VERIFIED_DIRECT_OUTPUT_MAPPING"
+    },
+    "TSH": {
+      "observed_value": 0.68,
+      "candidate_model_species": null,
+      "status": "NO_VERIFIED_DIRECT_OUTPUT_MAPPING"
+    }
+  },
+  "data_quality_flags": [],
   "patient_observations": {
     "patient_id": 1,
+    "row_index": 0,
     "age": 28.0,
     "weight": 44.6,
     "height": 152.0,
@@ -102,12 +140,17 @@
     "fsh": 7.95,
     "fsh_lh_ratio": 2.160326086956521,
     "amh": 2.07,
+    "progesterone": 0.57,
+    "prolactin": 45.16,
+    "tsh": 0.68,
     "cycle_status_encoded": 2.0,
+    "cycle_length_encoded": 5.0,
     "total_follicles": 6.0,
     "left_follicles": 3.0,
     "right_follicles": 3.0,
     "mean_follicle_size": 18.0,
-    "endometrium": 8.5
+    "endometrium": 8.5,
+    "pcos_label": 0
   },
   "scenario_info": {
     "name": "integration_test_p1_plus_0_1_percent",
@@ -23266,42 +23309,42 @@
   },
   "assertions": [
     {
-      "code": "assert twin.get_status() == \"initialized\"",
+      "code": "twin.get_status() == \"initialized\"",
       "passed": true,
       "eval": "initialized"
     },
     {
-      "code": "assert baseline_values.shape == (1201, 46)",
+      "code": "baseline_values.shape == (1201, 46)",
       "passed": true,
       "eval": "(1201, 46)"
     },
     {
-      "code": "assert np.isfinite(baseline_values).all()",
+      "code": "np.isfinite(baseline_values).all()",
       "passed": true,
       "eval": "True"
     },
     {
-      "code": "assert twin.get_status() == \"baseline_ready\"",
+      "code": "twin.get_status() == \"baseline_ready\"",
       "passed": true,
       "eval": "baseline_ready"
     },
     {
-      "code": "assert scenario_values.shape == baseline_values.shape",
+      "code": "scenario_values.shape == baseline_values.shape",
       "passed": true,
       "eval": "(1201, 46) == (1201, 46)"
     },
     {
-      "code": "assert np.isfinite(scenario_values).all()",
+      "code": "np.isfinite(scenario_values).all()",
       "passed": true,
       "eval": "True"
     },
     {
-      "code": "assert twin.get_status() == \"scenario_ready\"",
+      "code": "twin.get_status() == \"scenario_ready\"",
       "passed": true,
       "eval": "scenario_ready"
     },
     {
-      "code": "assert np.isfinite(metrics[...]) for all 45 species",
+      "code": "np.isfinite(metrics[...]) for all 45 species",
       "passed": true,
       "eval": "45/45 species finite"
     }
