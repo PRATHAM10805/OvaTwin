@@ -1,6 +1,11 @@
+"""Regenerate fallbackData.json with real patient data and complete metadata."""
+
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+import math
 import numpy as np
+import pandas as pd
 
 from src.integration.test_digital_twin import load_clinical_dataset
 from src.Clinical.hpo_observation_builder import build_hpo_patient_values
@@ -8,10 +13,13 @@ from src.HPO.sbml_parameters import get_sbml_parameter_registry
 from src.twin.digital_twin import PatientDigitalTwin
 
 df = load_clinical_dataset()
-patient = build_hpo_patient_values(df.iloc[0])
+selected_row = df.iloc[0]
+patient = build_hpo_patient_values(selected_row)
 twin = PatientDigitalTwin(patient)
 
+init_status = twin.get_status()
 baseline = twin.run_baseline(start_day=0, end_day=120, points=1201)
+baseline_status = twin.get_status()
 
 registry = get_sbml_parameter_registry()
 parameter_id = registry.resolve_id("p1")
@@ -26,6 +34,7 @@ scenario = twin.run_scenario(
     end_day=120,
     points=1201,
 )
+scenario_status = twin.get_status()
 
 comparison = twin.compare_baseline_scenario(scenario_name)
 summary = twin.summary()
@@ -33,6 +42,11 @@ summary = twin.summary()
 colnames = twin._column_names(baseline.result)
 base_arr = np.asarray(baseline.result, dtype=float)
 scen_arr = np.asarray(scenario.result, dtype=float)
+
+baseline_shape = list(base_arr.shape)
+baseline_finite = bool(np.isfinite(base_arr).all())
+scenario_shape = list(scen_arr.shape)
+scenario_finite = bool(np.isfinite(scen_arr).all())
 
 step = 5
 sample_indices = list(range(0, len(base_arr), step))
@@ -50,21 +64,35 @@ for col in colnames:
         "scenario": [round(float(v), 5) for v in scen_arr[sample_indices, idx]]
     }
 
+all_metrics_finite = True
+for var, m in comparison.items():
+    for k in ["baseline_final", "scenario_final", "final_difference", "maximum_absolute_difference", "mean_absolute_difference", "rmse"]:
+        val = m.get(k)
+        if val is None or not math.isfinite(val):
+            all_metrics_finite = False
+
 assertions = [
-    {"code": 'assert twin.get_status() == "initialized"', "passed": True, "eval": "initialized"},
-    {"code": "assert baseline_values.shape == (1201, 46)", "passed": True, "eval": "(1201, 46)"},
-    {"code": "assert np.isfinite(baseline_values).all()", "passed": True, "eval": "True"},
-    {"code": 'assert twin.get_status() == "baseline_ready"', "passed": True, "eval": "baseline_ready"},
-    {"code": "assert scenario_values.shape == baseline_values.shape", "passed": True, "eval": "(1201, 46) == (1201, 46)"},
-    {"code": "assert np.isfinite(scenario_values).all()", "passed": True, "eval": "True"},
-    {"code": 'assert twin.get_status() == "scenario_ready"', "passed": True, "eval": "scenario_ready"},
-    {"code": "assert np.isfinite(metrics[...]) for all 45 species", "passed": True, "eval": "45/45 species finite"}
+    {"code": 'twin.get_status() == "initialized"', "passed": bool(init_status == "initialized"), "eval": str(init_status)},
+    {"code": "baseline_values.shape == (1201, 46)", "passed": bool(baseline_shape == [1201, 46]), "eval": str(tuple(baseline_shape))},
+    {"code": "np.isfinite(baseline_values).all()", "passed": bool(baseline_finite), "eval": str(baseline_finite)},
+    {"code": 'twin.get_status() == "baseline_ready"', "passed": bool(baseline_status == "baseline_ready"), "eval": str(baseline_status)},
+    {"code": "scenario_values.shape == baseline_values.shape", "passed": bool(scenario_shape == baseline_shape), "eval": f"{tuple(scenario_shape)} == {tuple(baseline_shape)}"},
+    {"code": "np.isfinite(scenario_values).all()", "passed": bool(scenario_finite), "eval": str(scenario_finite)},
+    {"code": 'twin.get_status() == "scenario_ready"', "passed": bool(scenario_status == "scenario_ready"), "eval": str(scenario_status)},
+    {"code": "np.isfinite(metrics[...]) for all 45 species", "passed": bool(all_metrics_finite), "eval": f"{len(comparison)}/45 species finite"}
 ]
 
 out_data = {
+    "is_live": False,
+    "is_fallback": True,
+    "generated_at": datetime.now(timezone.utc).isoformat(),
+    "source_note": "Saved sample offline snapshot from Patient File No. 1. Not a live simulation run.",
     "summary": summary,
+    "comparison_readiness": twin.profile.comparison_readiness(),
+    "data_quality_flags": list(twin.profile.data_quality_flags),
     "patient_observations": {
         "patient_id": patient.patient_id,
+        "row_index": 0,
         "age": patient.age,
         "weight": patient.weight,
         "height": patient.height,
@@ -74,12 +102,17 @@ out_data = {
         "fsh": patient.fsh,
         "fsh_lh_ratio": patient.fsh_lh_ratio,
         "amh": patient.amh,
+        "progesterone": patient.progesterone,
+        "prolactin": patient.prolactin,
+        "tsh": patient.tsh,
         "cycle_status_encoded": patient.cycle_status_encoded,
+        "cycle_length_encoded": patient.cycle_length_encoded,
         "total_follicles": patient.total_follicle_count,
         "left_follicles": patient.follicle_count_left,
         "right_follicles": patient.follicle_count_right,
         "mean_follicle_size": patient.mean_follicle_size,
-        "endometrium": getattr(patient, "endometrium", None)
+        "endometrium": getattr(patient, "endometrium", None),
+        "pcos_label": int(selected_row.get("PCOS (Y/N)")) if "PCOS (Y/N)" in selected_row.index and pd.notna(selected_row.get("PCOS (Y/N)")) else None,
     },
     "scenario_info": {
         "name": scenario_name,
@@ -100,4 +133,4 @@ out_path = Path("frontend/src/fallbackData.json")
 with open(out_path, "w") as f:
     json.dump(out_data, f, indent=2)
 
-print("SUCCESS: Generated fallbackData.json size:", out_path.stat().st_size)
+print("Saved updated fallbackData.json successfully!")
