@@ -15,7 +15,7 @@ A modern React application connected to a live FastAPI simulation backend for:
                    │  JSON (fetch)
                    │  POST /api/run-simulation
        ┌───────────▼────────────┐
-       │   FastAPI Backend      │  <-- src/api/server.py
+       │   FastAPI Backend      │  <-- server.py
        │ http://localhost:8000  │
        └───────────▲────────────┘
                    │
@@ -32,7 +32,7 @@ A modern React application connected to a live FastAPI simulation backend for:
 ### 1. Start the Live FastAPI Backend
 In your project root (`c:\Users\priya\OneDrive\Desktop\PCOS`):
 ```powershell
-uvicorn src.api.server:app --port 8000 --reload
+uvicorn server:app --port 8000 --reload
 ```
 API docs available at: `http://localhost:8000/docs`
 

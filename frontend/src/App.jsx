@@ -76,7 +76,7 @@ export default function App() {
       })
       .catch(() => {
         setApiStatus("offline");
-        setServerMessage("Backend offline (start server: uvicorn src.api.server:app --port 8000)");
+        setServerMessage("Backend offline (start server: uvicorn server:app --port 8000)");
       });
   }, []);
 
@@ -108,7 +108,7 @@ export default function App() {
       setServerMessage(`Simulation completed in real-time for ${param} (${pct >= 0 ? "+" : ""}${pct}%)`);
     } catch (err) {
       setApiStatus("offline");
-      setServerMessage(`Backend offline (${err.message}). Start: uvicorn src.api.server:app --port 8000`);
+      setServerMessage(`Backend offline (${err.message}). Start: uvicorn server:app --port 8000`);
     } finally {
       setLoading(false);
     }
